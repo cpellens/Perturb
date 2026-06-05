@@ -1,18 +1,25 @@
 #pragma once
 
 #include "CudaChannel.h"
+#include "GaussianBlurFilter.h"
+#include "GrayscaleFilter.h"
+#include "ICudaImageFilter.h"
 #include "Image.h"
+#include "SobelFilter.h"
 
-class NormalMapFilter {
+template<int Channels>
+class NormalMapFilter final : public ICudaImageFilter<Channels> {
 public:
     NormalMapFilter() = delete;
 
-    explicit NormalMapFilter(CudaChannel &channel)
-        : channel_(channel) {
-    }
+    explicit NormalMapFilter(CudaChannel &channel, NppiMaskSize blurKernelSize = NPP_MASK_SIZE_3_X_3);
 
     void apply(const Image<1> &a, const Image<1> &b) const;
 
+    void apply(const Image<Channels> &image) const override;
+
 private:
-    CudaChannel &channel_;
+    SobelFilter<Channels> sobelFilter;
+    GaussianBlurFilter<Channels> gaussianBlurFilter;
+    GrayscaleFilter<Channels> grayscaleFilter;
 };

@@ -3,9 +3,19 @@
 #include <iostream>
 #include <stdexcept>
 
+#include "CudaError.h"
+
 void CudaChannel::freeDevicePtr() noexcept {
-    cudaFreeAsync(*device_ptr, npp_stream_context->hStream);
-    device_ptr.reset(nullptr);
+    if (!npp_stream_context->hStream || !device_ptr) {
+        device_ptr = std::make_unique<void *>(nullptr);
+        return;
+    }
+
+    auto const ptr = device_ptr.release();
+    cudaFreeAsync(ptr, npp_stream_context->hStream);
+    allocation_size = 0;
+
+    cudaStreamSynchronize(npp_stream_context->hStream);
 }
 
 void CudaChannel::createDevicePtr(const size_t size) {
@@ -13,16 +23,16 @@ void CudaChannel::createDevicePtr(const size_t size) {
         throw std::runtime_error("CUDA stream is not initialized");
     }
 
-    if (device_ptr) {
+    if (device_ptr && allocation_size > 0) {
         freeDevicePtr();
     }
 
-    device_ptr = std::make_unique<void *>();
-    if (const auto allocStatus = cudaMallocAsync(&*device_ptr, size, npp_stream_context->hStream);
+    device_ptr = std::make_unique<void *>(nullptr);
+    if (const auto allocStatus = cudaMallocAsync(device_ptr.get(), size, npp_stream_context->hStream);
         allocStatus != cudaSuccess) {
-        throw std::runtime_error(
-            "Failed to allocate device memory: " + std::string(cudaGetErrorString(allocStatus)));
+        handleCudaError(allocStatus);
     }
+
     allocation_size = size;
 
 #ifdef _DEBUG
@@ -44,9 +54,6 @@ void CudaChannel::setDevicePtr(void *ptr, const size_t size) {
 
     if (device_ptr) {
         freeDevicePtr();
-        allocation_size = 0;
-        device_ptr.reset(nullptr);
-        cudaStreamSynchronize(npp_stream_context->hStream);
     }
 
     device_ptr = std::make_unique<void *>(ptr);
@@ -78,16 +85,17 @@ CudaChannel::CudaChannel(const CudaRuntime &runtime) {
 }
 
 CudaChannel::~CudaChannel() {
-    if (device_ptr) {
-        freeDevicePtr();
+    freeDevicePtr();
+    if (npp_stream_context) {
+        npp_stream_context->hStream = nullptr;
+        npp_stream_context.reset();
     }
-    npp_stream_context.reset();
     device_ptr.reset();
     allocation_size = 0;
 }
 
 void *CudaChannel::getDevicePtr() const noexcept {
-    return *device_ptr;
+    return device_ptr ? *device_ptr : nullptr;
 }
 
 void *CudaChannel::read(const size_t size) const {
@@ -120,8 +128,7 @@ void CudaChannel::read(const size_t size, void *dst) const {
     if (const auto copyStatus = cudaMemcpyAsync(dst, *device_ptr, size, cudaMemcpyDeviceToHost,
                                                 npp_stream_context->hStream);
         copyStatus != cudaSuccess) {
-        throw std::runtime_error(
-            "Failed to copy data from device to host: " + std::string(cudaGetErrorString(copyStatus)));
+        handleCudaError(copyStatus);
     }
 }
 
@@ -139,7 +146,6 @@ void CudaChannel::write(const size_t size, const void *src) {
     if (const auto copyStatus = cudaMemcpyAsync(*device_ptr, src, size, cudaMemcpyHostToDevice,
                                                 npp_stream_context->hStream);
         copyStatus != cudaSuccess) {
-        throw std::runtime_error(
-            "Failed to copy data from host to device: " + std::string(cudaGetErrorString(copyStatus)));
+        handleCudaError(copyStatus);
     }
 }

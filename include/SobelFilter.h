@@ -1,19 +1,20 @@
 #pragma once
 
+#include "ICudaImageFilter.h"
 #include "Image.h"
 
-class SobelFilter {
+template<int Channels>
+class SobelFilter final : public ICudaImageFilter<Channels> {
 public:
     enum Direction {
         Horizontal,
         Vertical,
     };
 
-    explicit SobelFilter(CudaChannel &channel);
+    explicit SobelFilter(CudaChannel &channel) : ICudaImageFilter<Channels>(channel) {
+    }
 
-    template<int Channels>
     void apply(const Image<Channels> &image, Direction direction) const;
 
-private:
-    CudaChannel &channel_;
+    void apply(const Image<Channels> &image) const override;
 };

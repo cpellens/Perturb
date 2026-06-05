@@ -3,12 +3,12 @@
 #include "common.h"
 #include "CudaChannel.h"
 
-template<uint8_t CHANNELS>
+template<uint8_t Channels>
 class Image {
     int width{}, height{};
     std::vector<Npp32f> image;
 
-    const uint8_t channels = CHANNELS;
+    const uint8_t channels = Channels;
 
 public:
     Image() = delete;
@@ -35,8 +35,9 @@ public:
 
     [[nodiscard]] int getHeight() const noexcept;
 
-    [[nodiscard]] static constexpr uint8_t getChannels() noexcept { return CHANNELS; }
-    [[nodiscard]] std::span<const Npp32f> getPixels() const noexcept { return image; }
+    [[nodiscard]] static constexpr uint8_t getChannels() noexcept;
+
+    [[nodiscard]] std::span<const Npp32f> getPixels() const noexcept;
 
     std::span<Npp32f> getPixelsMutable() noexcept;
 
@@ -50,3 +51,8 @@ public:
 
     [[nodiscard]] Npp32f *createDevicePtr(const CudaChannel &channel) const;
 };
+
+template<uint8_t Channels>
+constexpr uint8_t Image<Channels>::getChannels() noexcept {
+    return Channels;
+}

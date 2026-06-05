@@ -7,15 +7,11 @@
                                                 tmpDstPitch, size, offset, \
                                                 deviceResultPtr, \
                                                 tmpDstPitch, size, \
-                                                borderType, nppStreamCtx);
-
-SobelFilter::SobelFilter(CudaChannel &channel) : channel_(channel) {
-}
+                                                borderType, *nppStreamCtx);
 
 template<int Channels>
-void SobelFilter::apply(const Image<Channels> &image, const Direction direction) const {
+void SobelFilter<Channels>::apply(const Image<Channels> &image, const Direction direction) const {
     // Allocate space for gradient images
-    auto constexpr channels = Image<Channels>::getChannels();
     auto constexpr borderType = NPP_BORDER_REPLICATE;
     auto constexpr offset = NppiPoint{0, 0};
 
@@ -25,9 +21,8 @@ void SobelFilter::apply(const Image<Channels> &image, const Direction direction)
     auto const height = size.height;
 
     // Fetch CUDA contexts
-    auto const nppStreamCtx = channel_.getNppStreamContext();
-    auto const cudaStream = nppStreamCtx.hStream;
-    auto const nSrcStep = width * channels * sizeof(Npp32f);
+    auto const nppStreamCtx = &this->channel_->getNppStreamContext();
+    auto const nSrcStep = width * Channels * sizeof(Npp32f);
 
     // Create a pointer for the result of the gradient image
     size_t tmpDstPitch;
@@ -37,7 +32,7 @@ void SobelFilter::apply(const Image<Channels> &image, const Direction direction)
     }
 
     // This should now be the pointer to the image data on the GPU
-    const auto imageDevicePtr = static_cast<Npp32f *>(channel_.getDevicePtr());
+    const auto imageDevicePtr = static_cast<Npp32f *>(this->channel_->getDevicePtr());
 
     // Perform Sobel filter operation
     NppStatus status = NPP_SUCCESS;
@@ -78,19 +73,16 @@ void SobelFilter::apply(const Image<Channels> &image, const Direction direction)
         handleNppError(status);
     }
 
-    // Write the result back to the channel
-    if (auto copyStatus = cudaMemcpy2DAsync(imageDevicePtr, nSrcStep, deviceResultPtr, tmpDstPitch, nSrcStep,
-                                            size.height, cudaMemcpyDeviceToDevice,
-                                            cudaStream); copyStatus != cudaSuccess) {
-        handleCudaError(copyStatus);
-    }
-
-    // Free the result pointer once complete
-    cudaFreeAsync(deviceResultPtr, cudaStream);
+    // Frees the previous memory then updates the internal pointer
+    this->channel_->setDevicePtr(deviceResultPtr, tmpDstPitch * height);
 }
 
-template void SobelFilter::apply<1>(const Image<1> &image, Direction direction) const;
+template<int Channels>
+void SobelFilter<Channels>::apply(const Image<Channels> &image) const {
+    apply(image, Direction::Horizontal);
+    apply(image, Direction::Vertical);
+}
 
-template void SobelFilter::apply<3>(const Image<3> &image, Direction direction) const;
-
-template void SobelFilter::apply<4>(const Image<4> &image, Direction direction) const;
+template class SobelFilter<1>;
+template class SobelFilter<3>;
+template class SobelFilter<4>;

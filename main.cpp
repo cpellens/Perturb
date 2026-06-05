@@ -23,97 +23,55 @@ int main(const int argc, char *argv[]) {
 #endif
 
     timer->start("init cuda runtime");
-    const CudaRuntime runtime;
-    std::cout << "Using CUDA device: " << runtime.getDeviceName() << std::endl;
-    CudaChannel channel(runtime);
+    const auto runtime = std::make_unique<CudaRuntime>();
+    std::cout << "Using CUDA device: " << runtime->getDeviceName() << std::endl;
+    const auto channel = std::make_unique<CudaChannel>(*runtime);
+    constexpr int SourceChannels = 3;
+
+    // Create the filter pipeline
+    timer->lap("create filter pipeline");
+    const NormalMapFilter<SourceChannels> normalMap(*channel);
 
     for (int i = 1; i < argc; ++i) {
-        constexpr int SourceChannels = 3;
         const std::filesystem::path imagePath(argv[i]);
-
         if (!imagePath.has_filename() || !exists(imagePath)) {
             std::cerr << "Invalid image path: " << imagePath << std::endl;
             return 1;
         }
 
+        // Get the absolute path and the base filename
         auto const imagePathAbsolute = absolute(imagePath);
-        auto const imagePathAbsoluteStr = imagePathAbsolute.string();
         auto const baseFileName = imagePathAbsolute.stem();
 
         std::cout << "Using image: " << imagePathAbsolute << std::endl;
-        auto const outputPathAbsolute = std::filesystem::absolute(
-            imagePathAbsolute.parent_path().append(baseFileName.generic_string() + "-normal-map.png"));
+        auto const outputPathAbsolute = imagePathAbsolute.parent_path() / (baseFileName.string() + "-normal-map.png");
 
-        const Image<SourceChannels> sobelX(imagePathAbsoluteStr);
-        const Image sobelY(sobelX); // NOLINT(*-unnecessary-copy-initialization)
+        // Load the image
+        timer->lap("load image");
+        const Image<SourceChannels> image(imagePathAbsolute.string());
 
-        // Allocate space for the grayscale images
-        Image<1> grayscaleX(sobelX.getWidth(), sobelX.getHeight());
-        Image grayscaleY(grayscaleX);
+        // Write the image to the channel
+        timer->lap("image -> channel");
+        image.writeToChannel(*channel);
+        runtime->synchronize();
 
-        // Fetch the size of the input image
-        auto const imageSize = sobelX.getSize();
+        try {
+            // Create the normal map
+            timer->lap("create normal map");
+            normalMap.apply(image);
 
-        // Create the filter pipeline
-        timer->lap("create filter pipeline");
-        const SobelFilter filter(channel);
-        const GaussianBlurFilter blurFilter(channel, NPP_MASK_SIZE_3_X_3);
-        const GrayscaleFilter grayscale(channel);
-        const NormalMapFilter normalMap(channel);
+            // One last image for the normal map
+            timer->lap("normal map -> host");
+            Image<SourceChannels> normalMapImage(image.getWidth(), image.getHeight());
+            normalMapImage.readFromChannel(*channel);
 
-        // Apply the filter to the horizontal image
-        timer->lap("horizontal -> device");
-        sobelX.writeToChannel(channel);
-        runtime.synchronize();
+            runtime->synchronize();
 
-        timer->lap("apply horizontal sobel");
-        filter.apply<SourceChannels>(sobelX, SobelFilter::Horizontal);
-
-        timer->lap("soften result");
-        blurFilter.apply<SourceChannels>(sobelX);
-
-        timer->lap("grayscale horizontal result");
-        grayscale.apply<SourceChannels>(imageSize);
-
-        timer->lap("horizontal result -> host");
-        grayscaleX.readFromChannel(channel);
-
-        // Sync to ensure the GPU has finished processing the horizontal image
-        // because the next application will create a new pointer
-        runtime.synchronize();
-
-        // Apply the filter to the vertical image
-        sobelY.writeToChannel(channel);
-        runtime.synchronize();
-
-        timer->lap("apply vertical sobel");
-        filter.apply<SourceChannels>(sobelY, SobelFilter::Vertical);
-
-        timer->lap("soften result");
-        blurFilter.apply<SourceChannels>(sobelY);
-
-        timer->lap("grayscale vertical result");
-        grayscale.apply<SourceChannels>(imageSize);
-
-        timer->lap("vertical result -> host");
-        grayscaleY.readFromChannel(channel);
-
-        // Wait for the GPU to finish processing
-        runtime.synchronize();
-
-        // Create the normal map
-        timer->lap("create normal map");
-        normalMap.apply(grayscaleX, grayscaleY);
-
-        // One last image for the normal map
-        timer->lap("normal map -> host");
-
-        Image<SourceChannels> normalMapImage(grayscaleX.getWidth(), grayscaleX.getHeight());
-        normalMapImage.readFromChannel(channel);
-        runtime.synchronize();
-
-        normalMapImage.save<uint8_t>(outputPathAbsolute.string());
-        std::cout << "Saved normal map to: " << outputPathAbsolute << std::endl;
+            normalMapImage.save<uint8_t>(outputPathAbsolute.string());
+            std::cout << "Saved normal map to: " << outputPathAbsolute << std::endl;
+        } catch (const std::exception &e) {
+            std::cerr << "Error: " << e.what() << std::endl;
+        }
     }
 
     return 0;

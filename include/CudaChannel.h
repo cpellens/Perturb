@@ -17,6 +17,9 @@ class CudaChannel {
 public:
     explicit CudaChannel(const CudaRuntime &runtime);
 
+    explicit CudaChannel(const CudaRuntime *runtime) : CudaChannel(*runtime) {
+    }
+
     ~CudaChannel();
 
     [[nodiscard]] void *getDevicePtr() const noexcept;

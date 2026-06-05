@@ -103,8 +103,30 @@ inline void handleNppError(const NppStatus &status) {
     }
 }
 
+inline void handleNppError(const NppStatus &status, const std::string &message) {
+    static std::stringstream errMsg;
+
+    if (status != NPP_SUCCESS) {
+        errMsg.str("");
+
+        errMsg << "NPP Error [" << message << "]: " << nppGetErrorString(status) << '\n';
+        throw std::runtime_error(errMsg.str());
+    }
+}
+
 inline void handleCudaError(const cudaError_t &cudaErrorCode) {
     if (cudaErrorCode != cudaSuccess) {
         throw std::runtime_error("CUDA Error: " + std::string(cudaGetErrorString(cudaErrorCode)));
     }
+}
+
+inline void handleCudaError(const cudaError_t &cudaErrorCode, const std::string &message) {
+    if (cudaErrorCode != cudaSuccess) {
+        throw std::runtime_error("CUDA Error [" + message + "]: " + std::string(cudaGetErrorString(cudaErrorCode)));
+    }
+#ifdef _DEBUG
+    else {
+        std::cout << "CUDA Success [" << message << "]: " << std::string(cudaGetErrorString(cudaErrorCode)) << '\n';
+    }
+#endif
 }

@@ -1,18 +1,17 @@
 #pragma once
 
+#include "ICudaImageFilter.h"
 #include "Image.h"
 
-class GaussianBlurFilter {
+template<int Channels>
+class GaussianBlurFilter final : public ICudaImageFilter<Channels> {
 public:
     GaussianBlurFilter() = delete;
 
-    explicit GaussianBlurFilter(CudaChannel &channel,
-                                NppiMaskSize kernelSize) noexcept;
+    explicit GaussianBlurFilter(CudaChannel &channel, NppiMaskSize kernelSize) noexcept;
 
-    template<int Channels>
-    void apply(const Image<Channels> &image) const;
+    void apply(const Image<Channels> &image) const override;
 
-private:
+protected:
     NppiMaskSize kernelSize_;
-    CudaChannel &channel_;
 };

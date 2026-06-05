@@ -2,7 +2,7 @@
 #include "GaussianBlurFilter.h"
 
 template<int Channels>
-void GaussianBlurFilter::apply(const Image<Channels> &image) const {
+void GaussianBlurFilter<Channels>::apply(const Image<Channels> &image) const {
     auto constexpr bytesPerPixel = sizeof(Npp32f) * Channels;
 
     // Get image dimensions
@@ -10,7 +10,7 @@ void GaussianBlurFilter::apply(const Image<Channels> &image) const {
     size_t const nSrcStep = size.width * bytesPerPixel;
 
     // Get CUDA stream context
-    auto const nppStreamCtx = &channel_.getNppStreamContext();
+    auto const nppStreamCtx = &this->channel_->getNppStreamContext();
     auto const cudaStream = nppStreamCtx->hStream;
 
     size_t tmpDstPitch;
@@ -20,7 +20,7 @@ void GaussianBlurFilter::apply(const Image<Channels> &image) const {
     }
 
     // Fetch the device ptr
-    auto const deviceSrcPtr = static_cast<Npp32f *>(channel_.getDevicePtr());
+    auto const deviceSrcPtr = static_cast<Npp32f *>(this->channel_->getDevicePtr());
     if (!deviceSrcPtr) {
         throw std::invalid_argument("Device pointer is null");
     }
@@ -56,13 +56,16 @@ void GaussianBlurFilter::apply(const Image<Channels> &image) const {
     cudaFreeAsync(deviceResultPtr, cudaStream);
 }
 
-GaussianBlurFilter::GaussianBlurFilter(CudaChannel &channel,
-                                       const NppiMaskSize kernelSize) noexcept : kernelSize_(kernelSize),
-    channel_(channel) {
+template<int Channels>
+GaussianBlurFilter<
+    Channels>::GaussianBlurFilter(CudaChannel &channel,
+                                  const NppiMaskSize kernelSize) noexcept : ICudaImageFilter<Channels>(
+                                                                                channel),
+                                                                            kernelSize_(kernelSize) {
 }
 
-template void GaussianBlurFilter::apply<1>(const Image<1> &image) const;
+template class GaussianBlurFilter<1>;
 
-template void GaussianBlurFilter::apply<3>(const Image<3> &image) const;
+template class GaussianBlurFilter<3>;
 
-template void GaussianBlurFilter::apply<4>(const Image<4> &image) const;
+template class GaussianBlurFilter<4>;

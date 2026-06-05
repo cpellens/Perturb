@@ -2,21 +2,15 @@
 
 #include "common.h"
 #include "CudaChannel.h"
+#include "ICudaImageFilter.h"
 
-class GrayscaleFilter {
+template<int Channels>
+class GrayscaleFilter final : public ICudaImageFilter<Channels> {
 public:
-    GrayscaleFilter() = delete;
-
-    explicit GrayscaleFilter(CudaChannel &channel) : channel_(channel) {
+    explicit GrayscaleFilter(CudaChannel &channel) : ICudaImageFilter<Channels>(channel) {
     }
 
-    template<int Channels>
-    void apply(const NppiSize &size) const;
+    ~GrayscaleFilter() override = default;
 
-private:
-    CudaChannel &channel_;
+    void apply(const Image<Channels> &image) const override;
 };
-
-// 0xb1a800000
-// 0xb1ce00000
-// b1c2
