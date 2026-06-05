@@ -24,27 +24,27 @@ target_compile_features(cuda_kernels PUBLIC cxx_std_23)
 target_compile_options(cuda_kernels PRIVATE -Xnvlink -use-host-info -gencode arch=compute_80,code=lto_80)
 
 # Create exe target
-add_executable(norm ${SOURCES} main.cpp)
-set_target_properties(norm PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+add_executable(perturb ${SOURCES} main.cpp)
+set_target_properties(perturb PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 # Link the cuda kernels
-target_link_libraries(norm PRIVATE cuda_kernels)
+target_link_libraries(perturb PRIVATE cuda_kernels)
 
 # Configure include dirs
-target_include_directories(norm PRIVATE "${CMAKE_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/cuda")
+target_include_directories(perturb PRIVATE "${CMAKE_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/cuda")
 target_include_directories(cuda_kernels PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 # Add C++17 compile features
-target_compile_features(norm PRIVATE cxx_std_23)
+target_compile_features(perturb PRIVATE cxx_std_23)
 
 # CUDA Configuration
 set(CUDA_ROOT "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2")
 list(APPEND CMAKE_PREFIX_PATH "${CUDA_ROOT}\\lib\\cmake")
-target_include_directories(norm PRIVATE "${CUDA_ROOT}/include")
-target_link_directories(norm PRIVATE "${CUDA_ROOT}/lib/x64")
+target_include_directories(perturb PRIVATE "${CUDA_ROOT}/include")
+target_link_directories(perturb PRIVATE "${CUDA_ROOT}/lib/x64")
 
 # Link against CUDA libraries
-target_link_libraries(norm PRIVATE npps nppim nppif nppitc nppisu nppicc nppist cuda cudart_static nppial)
+target_link_libraries(perturb PRIVATE npps nppim nppif nppitc nppisu nppicc nppist cuda cudart_static nppial)
 
 # STB - FetchContent
 include(FetchContent)
@@ -57,15 +57,15 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(stb)
-target_include_directories(norm PRIVATE ${stb_SOURCE_DIR})
+target_include_directories(perturb PRIVATE ${stb_SOURCE_DIR})
 
 # Copy necessary DLLs to the output directory
 if (WIN32)
-    add_custom_command(TARGET norm POST_BUILD
+    add_custom_command(TARGET perturb POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CUDA_ROOT}/bin/x64/cudart64_13.dll"
 #            "${CUDA_ROOT}/bin/x64/cublas64_13.dll"
 #            "${CUDA_ROOT}/bin/x64/cusolver64_12.dll"
 #            "${CUDA_ROOT}/bin/x64/cusparse64_12.dll"
-            $<TARGET_FILE_DIR:norm>)
+            $<TARGET_FILE_DIR:perturb>)
 endif ()

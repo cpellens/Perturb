@@ -129,3 +129,9 @@ CMakeUserPresets.json
 
 # External projects
 *-prefix/
+/.idea/inspectionProfiles/Project_Default.xml
+/.idea/editor.xml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/norm.iml
+/.idea/vcs.xml
