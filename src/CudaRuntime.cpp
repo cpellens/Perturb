@@ -3,7 +3,9 @@
 #include <cuda.h>
 #include <stdexcept>
 
-CudaRuntime::CudaRuntime() : event(nullptr), stream(nullptr) {
+#include "CudaError.h"
+
+CudaRuntime::CudaRuntime() : stream(nullptr) {
     cuInit(0);
     device_prop = std::make_unique<cudaDeviceProp>();
     if (cudaGetDeviceProperties(device_prop.get(), 0) != cudaSuccess) {
@@ -11,14 +13,10 @@ CudaRuntime::CudaRuntime() : event(nullptr), stream(nullptr) {
     }
 
     stream = std::make_unique<cudaStream_t>();
-    event = std::make_unique<cudaEvent_t>();
     cudaSetDevice(0);
 
     if (cudaStreamCreate(stream.get()) != cudaSuccess) {
         throw std::runtime_error("Failed to create CUDA stream");
-    }
-    if (cudaEventCreate(event.get()) != cudaSuccess) {
-        throw std::runtime_error("Failed to create CUDA event");
     }
 }
 
@@ -27,15 +25,14 @@ std::string CudaRuntime::getDeviceName() const {
 }
 
 void CudaRuntime::synchronize() const {
-    if (cudaStreamSynchronize(*stream) != cudaSuccess) {
-        throw std::runtime_error("Failed to synchronize CUDA stream");
+    if (auto const status = cudaStreamSynchronize(*stream); status != cudaSuccess) {
+        handleCudaError(status);
     }
 }
 
 CudaRuntime::~CudaRuntime() {
-    cudaEventDestroy(*event);
     if (auto const ptr = stream.release()) {
         cudaStreamDestroy(*ptr);
     }
-    cuDevicePrimaryCtxRelease(0);
+    cudaDeviceReset();
 }

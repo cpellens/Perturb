@@ -4,8 +4,7 @@
 #include <memory>
 #include <string>
 
-class CudaRuntime {
-    std::unique_ptr<cudaEvent_t> event;
+class CudaRuntime final {
     std::unique_ptr<cudaDeviceProp> device_prop;
 
 protected:

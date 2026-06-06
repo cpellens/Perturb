@@ -21,7 +21,7 @@ set_target_properties(cuda_kernels PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 target_compile_features(cuda_kernels PUBLIC cxx_std_23)
 
 # Newer features
-target_compile_options(cuda_kernels PRIVATE -Xnvlink -use-host-info -gencode arch=compute_80,code=lto_80)
+target_compile_options(cuda_kernels PRIVATE -Xnvlink -use-host-info -gencode arch=compute_121,code=lto_121 --enable-tile --gen-opt-lto -t 6 --use_fast_math --prune)
 
 # Create exe target
 add_executable(perturb ${SOURCES} main.cpp)
@@ -34,7 +34,7 @@ target_link_libraries(perturb PRIVATE cuda_kernels)
 target_include_directories(perturb PRIVATE "${CMAKE_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/cuda")
 target_include_directories(cuda_kernels PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-# Add C++17 compile features
+# Add C++23 compile features
 target_compile_features(perturb PRIVATE cxx_std_23)
 
 # CUDA Configuration

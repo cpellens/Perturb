@@ -1,13 +1,9 @@
 #include <iostream>
-#include <vector>
 
 #include "CudaChannel.h"
 #include "CudaRuntime.h"
-#include "GaussianBlurFilter.h"
-#include "GrayscaleFilter.h"
 #include "Image.h"
 #include "NormalMapFilter.h"
-#include "SobelFilter.h"
 #include "Timer.h"
 
 int main(const int argc, char *argv[]) {
@@ -48,7 +44,7 @@ int main(const int argc, char *argv[]) {
 
         // Load the image
         timer->lap("load image");
-        const Image<SourceChannels> image(imagePathAbsolute.string());
+        Image<SourceChannels> image(imagePathAbsolute.string());
 
         // Write the image to the channel
         timer->lap("image -> channel");
@@ -62,17 +58,20 @@ int main(const int argc, char *argv[]) {
 
             // One last image for the normal map
             timer->lap("normal map -> host");
-            Image<SourceChannels> normalMapImage(image.getWidth(), image.getHeight());
-            normalMapImage.readFromChannel(*channel);
+            image.readFromChannel(*channel);
 
             runtime->synchronize();
 
-            normalMapImage.save<uint8_t>(outputPathAbsolute.string());
+            image.save<uint8_t>(outputPathAbsolute.string());
             std::cout << "Saved normal map to: " << outputPathAbsolute << std::endl;
         } catch (const std::exception &e) {
             std::cerr << "Error: " << e.what() << std::endl;
         }
     }
+
+    timer->stop();
+    channel->freeDevicePtr();
+    cudaDeviceReset();
 
     return 0;
 }
