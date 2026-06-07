@@ -7,11 +7,15 @@
 #include "NormalMapFilter.h"
 #include "Timer.h"
 
+#include <omp.h>
+
 int main(const int argc, char *argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <image> [<...>]\n";
         return 1;
     }
+
+    constexpr int SourceChannels = 3;
 
 #ifdef _DEBUG
     auto const timer = std::make_unique<Timer>(std::cerr);
@@ -22,59 +26,70 @@ int main(const int argc, char *argv[]) {
     timer->start("init cuda runtime");
     const auto runtime = std::make_unique<CudaRuntime>();
     std::cout << "Using CUDA device: " << runtime->getDeviceName() << std::endl;
+
     const auto channel = std::make_unique<CudaChannel>(*runtime);
-    const auto exrWriter = std::make_unique<ExrWriter>();
-    constexpr int SourceChannels = 3;
-
-    // Create the filter pipeline
-    timer->lap("create filter pipeline");
     const NormalMapFilter<SourceChannels> normalMap(*channel);
+    std::vector<std::tuple<Image<SourceChannels>, std::string> > images{};
+    images.reserve(argc);
 
+    timer->beginLap("load images");
+
+#pragma omp parallel for shared(argv, argc, images)
     for (int i = 1; i < argc; ++i) {
         const std::filesystem::path imagePath(argv[i]);
         if (!imagePath.has_filename() || !exists(imagePath)) {
             std::cerr << "Invalid image path: " << imagePath << std::endl;
-            return 1;
+            continue;
         }
 
         // Get the absolute path and the base filename
         auto const imagePathAbsolute = absolute(imagePath);
         auto const baseFileName = imagePathAbsolute.stem();
-        auto const outputPathAbsolute = imagePathAbsolute.parent_path() / (baseFileName.string() + "-normal-map.exr");
-
-        std::cout << "Using image: " << imagePathAbsolute << std::endl;
+        auto const outputPath = imagePathAbsolute.parent_path() / (baseFileName.string() + "-normal-map.exr");
 
         // Load the image
-        timer->lap("load image");
         Image<SourceChannels> image(imagePathAbsolute.string());
+        images.emplace_back(std::move(image), outputPath.string());
 
-        try {
-            // Write the image to the channel
-            // (Host memory -> Device memory)
-            timer->lap("image -> channel");
+        std::cout << "Loaded image: " << imagePathAbsolute << std::endl;
+    }
+
+    try {
+        // Write the image to the channel
+        // (Host memory -> Device memory)
+
+        for (auto &[image, outputPath]: images) {
+            timer->beginLap("image -> channel");
             image.writeToChannel(*channel);
             runtime->synchronize();
 
             // Create the normal map
             // Executes the normal map filtering on the device
             // then writes back to device memory
-            timer->lap("create normal map");
+            timer->beginLap("create normal map");
             normalMap.apply(image);
 
             // Read the image back from the device memory into host memory.
             // The normal map will always have 3 dimensions. Nobody knows why. It should be 2.
-            timer->lap("normal map -> host");
+            timer->beginLap("normal map -> host");
             image.readFromChannel(*channel);
 
             // Wait for the device to complete
             runtime->synchronize();
-
-            // image.save<uint8_t>(outputPathAbsolute.string());
-            exrWriter->write < 3 > (image, outputPathAbsolute.string());
-            std::cout << "Saved normal map to: " << outputPathAbsolute << std::endl;
-        } catch (const std::exception &e) {
-            std::cerr << "Error: " << e.what() << std::endl;
         }
+    } catch (const std::exception &e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+
+    timer->beginLap("write images");
+    ExrWriter exrWriter;
+
+#pragma omp parallel for shared(images) private(exrWriter)
+    for (int i = 0; i < images.size(); ++i) {
+        auto const [image, outputPath] = images[i];
+        exrWriter.write(image, outputPath);
+        std::cout << "Wrote image: " << outputPath << std::endl;
     }
 
     timer->stop();

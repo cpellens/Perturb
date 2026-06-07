@@ -47,6 +47,10 @@ target_link_directories(perturb PRIVATE "${CUDA_ROOT}/lib/x64")
 # Link against CUDA libraries
 target_link_libraries(perturb PRIVATE nppim nppif nppitc nppisu nppicc nppist cuda cudart_static nppial)
 
+# Configure OpenMP
+find_package(OpenMP REQUIRED)
+target_compile_options(perturb PRIVATE ${OpenMP_CXX_FLAGS})
+
 # STB - FetchContent
 include(FetchContent)
 FetchContent_Declare(

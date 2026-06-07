@@ -35,20 +35,24 @@ void ExrWriter::write(const Image<Channels> &image, const std::string &filename)
     initializeExrHeader(Channels);
     initializeExrImage(Channels);
 
+    auto const [imageWidth, imageHeight] = image.getSize();
+
     // Update the image metadata
-    exr_image_->width = image.getWidth();
-    exr_image_->height = image.getHeight();
+    exr_image_->width = imageWidth;
+    exr_image_->height = imageHeight;
 
     {
         // Separate the image channels into pixel buffers
         std::array<Npp32f *, Channels> pixelBuffers{};
         preparePixelBuffers<Channels>(image, pixelBuffers);
 
-        // The images in the exr_image must be an unsigned char** instead of float**
+        // Copy the pixel buffers into the EXR image
+        auto const pixelBufferSize = imageWidth * imageHeight * sizeof(Npp32f);
         exr_image_->images = new Npp8u *[Channels];
         for (int c = 0; c < Channels; ++c) {
-            exr_image_->images[c] = new Npp8u[image.getWidth() * image.getHeight() * sizeof(Npp32f)];
-            std::memmove(exr_image_->images[c], pixelBuffers[c], image.getWidth() * image.getHeight() * sizeof(Npp32f));
+            auto const idx = c;
+            exr_image_->images[idx] = new Npp8u[pixelBufferSize];
+            std::memmove(exr_image_->images[idx], pixelBuffers[c], pixelBufferSize);
         }
     }
 

@@ -48,7 +48,10 @@ void NormalMapFilter<Channels>::apply(const Image<1> &a, const Image<1> &b) cons
 
     // Calculate the grid size
     constexpr dim3 blockSize(16, 16);
-    const dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
+
+    auto const gridSizeX = (width + blockSize.x - 1) / blockSize.x;
+    auto const gridSizeY = (height + blockSize.y - 1) / blockSize.y;
+    const dim3 gridSize(gridSizeX, gridSizeY);
 
     // Run the normal map kernel
     launchBuildNormalMap(gridSize, blockSize, devicePtrA, devicePtrB, dstPtr, nSrcStep, width, height, 1);
@@ -71,14 +74,14 @@ void NormalMapFilter<Channels>::apply(const Image<Channels> &image) const {
     // processing the Sobel filters 3x per axis
     grayscaleFilter.apply(image);
 
-    Image < 1 > sobelResultX{width, height};
+    Image<1> sobelResultX{width, height};
     sobelResultX.readFromChannel(this->channel_);
 
     // Create a copy of the above result
     Image sobelResultY{sobelResultX};
 
     // Perform Sobel filter on the horizontal axis
-    sobelFilter.apply(sobelResultX, SobelFilter < 1 > ::Horizontal);
+    sobelFilter.apply(sobelResultX, SobelFilter<1>::Horizontal);
     gaussianBlurFilter.apply(sobelResultX);
 
     // Read horizontal result into host memory
@@ -86,12 +89,10 @@ void NormalMapFilter<Channels>::apply(const Image<Channels> &image) const {
     cudaStreamSynchronize(cudaStream);
 
     // Do the same on the vertical axis
-    // First, need to write the result image to the channel
     sobelResultY.writeToChannel(this->channel_);
-    cudaStreamSynchronize(cudaStream);
 
     // Perform Sobel filter on the vertical axis
-    sobelFilter.apply(sobelResultY, SobelFilter < 1 > ::Vertical);
+    sobelFilter.apply(sobelResultY, SobelFilter<1>::Vertical);
     gaussianBlurFilter.apply(sobelResultY);
 
     sobelResultY.readFromChannel(this->channel_);

@@ -49,10 +49,10 @@ void buildNormalMap(const Npp32f *gx,
                     const int width,
                     const int height,
                     const int channels) {
-    // 2‑D thread indices
-    // Grid of blocks -> each block contains a grid of threads
-    // Block <-> Block: Global Memory
-    // Thread <-> Thread: Shared Memory
+    // 2‑D thread indices:
+    // - Grid of blocks -> each block contains a grid of threads
+    // - Block <-> Block: Global Memory
+    // - Thread <-> Thread: Shared Memory
 
     const int blockOffsetX = blockIdx.x * blockDim.x;
     const int blockOffsetY = blockIdx.y * blockDim.y;

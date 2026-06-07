@@ -44,7 +44,7 @@ public:
         current_lap = std::make_unique<Lap>(name);
     }
 
-    void lap(const char *name) noexcept {
+    void beginLap(const char *name) noexcept {
         if (current_lap) {
             stop();
         }
