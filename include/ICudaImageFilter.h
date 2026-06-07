@@ -1,4 +1,5 @@
 #pragma once
+
 #include "Image.h"
 #include "CudaChannel.h"
 
@@ -19,6 +20,8 @@ public:
 
 protected:
     CudaChannel *channel_;
+
+    const NppStreamContext *getNppStreamContext() const;
 
     friend class CudaRuntime;
     friend class CudaChannel;

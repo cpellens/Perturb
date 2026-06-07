@@ -4,19 +4,21 @@
 #include "normal_map.cu"
 
 template<int Channels>
-NormalMapFilter<
-    Channels>::NormalMapFilter(CudaChannel &channel, NppiMaskSize blurKernelSize) : ICudaImageFilter<Channels>(channel),
-    sobelFilter(channel),
-    gaussianBlurFilter(channel, blurKernelSize),
-    grayscaleFilter(channel) {
+NormalMapFilter<Channels>::NormalMapFilter(
+    CudaChannel &channel,
+    const NppiMaskSize blurKernelSize)
+    : ICudaImageFilter<Channels>(channel),
+      sobelFilter(channel),
+      gaussianBlurFilter(channel, blurKernelSize),
+      grayscaleFilter(channel) {
 }
 
 template<int Channels>
 void NormalMapFilter<Channels>::apply(const Image<1> &a, const Image<1> &b) const {
-    auto constexpr bytesPerPixel = sizeof(Npp32f);
+    auto constexpr bytesPerPixelChannel = sizeof(Npp32f);
 
     const auto [width, height] = a.getSize();
-    auto const nSrcStep = width * bytesPerPixel;
+    auto const nSrcStep = width * bytesPerPixelChannel;
 
     // Fetch CUDA contexts
     auto const nppStreamCtx = &this->channel_->getNppStreamContext();
@@ -44,6 +46,7 @@ void NormalMapFilter<Channels>::apply(const Image<1> &a, const Image<1> &b) cons
 
     cudaStreamSynchronize(cudaStream);
 
+    // Calculate the grid size
     constexpr dim3 blockSize(16, 16);
     const dim3 gridSize((width + blockSize.x - 1) / blockSize.x, (height + blockSize.y - 1) / blockSize.y);
 
@@ -60,40 +63,46 @@ template<int Channels>
 void NormalMapFilter<Channels>::apply(const Image<Channels> &image) const {
     auto const [width, height] = image.getSize();
 
-    Image<Channels> sobelResultX{width, height};
-    sobelResultX.readFromChannel(*this->channel_);
+    // Fetch the NPP context
+    auto const nppStreamCtx = this->getNppStreamContext();
+    auto const cudaStream = nppStreamCtx->hStream;
 
-    // Sync
-    auto nppStreamCtx = &this->channel_->getNppStreamContext();
-    cudaStreamSynchronize(nppStreamCtx->hStream);
+    // First, we can perform the grayscale filter on the input image to avoid
+    // processing the Sobel filters 3x per axis
+    grayscaleFilter.apply(image);
+
+    Image < 1 > sobelResultX{width, height};
+    sobelResultX.readFromChannel(this->channel_);
 
     // Create a copy of the above result
-    Image<Channels> sobelResultY{sobelResultX};
+    Image sobelResultY{sobelResultX};
 
     // Perform Sobel filter on the horizontal axis
-    sobelFilter.apply(sobelResultX, SobelFilter<Channels>::Horizontal);
+    sobelFilter.apply(sobelResultX, SobelFilter < 1 > ::Horizontal);
     gaussianBlurFilter.apply(sobelResultX);
-    grayscaleFilter.apply(sobelResultX);
 
-    Image<1> sobelResultXGrayscale{width, height};
-    sobelResultXGrayscale.readFromChannel(*this->channel_);
-    cudaStreamSynchronize(nppStreamCtx->hStream);
+    // Read horizontal result into host memory
+    sobelResultX.readFromChannel(this->channel_);
+    cudaStreamSynchronize(cudaStream);
 
     // Do the same on the vertical axis
     // First, need to write the result image to the channel
-    sobelResultY.writeToChannel(*this->channel_);
-    cudaStreamSynchronize(nppStreamCtx->hStream);
+    sobelResultY.writeToChannel(this->channel_);
+    cudaStreamSynchronize(cudaStream);
 
     // Perform Sobel filter on the vertical axis
-    sobelFilter.apply(sobelResultY, SobelFilter<Channels>::Vertical);
+    sobelFilter.apply(sobelResultY, SobelFilter < 1 > ::Vertical);
     gaussianBlurFilter.apply(sobelResultY);
-    grayscaleFilter.apply(sobelResultY);
 
-    Image<1> sobelResultYGrayscale{width, height};
-    sobelResultYGrayscale.readFromChannel(*this->channel_);
+    sobelResultY.readFromChannel(this->channel_);
 
     // Now we can apply the normal map calculation
-    apply(sobelResultXGrayscale, sobelResultYGrayscale);
+    apply(sobelResultX, sobelResultY);
+}
+
+template<int Channels>
+const NppStreamContext *ICudaImageFilter<Channels>::getNppStreamContext() const {
+    return &channel_->getNppStreamContext();
 }
 
 template class NormalMapFilter<3>;

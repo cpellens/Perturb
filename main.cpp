@@ -2,6 +2,7 @@
 
 #include "CudaChannel.h"
 #include "CudaRuntime.h"
+#include "ExrWriter.h"
 #include "Image.h"
 #include "NormalMapFilter.h"
 #include "Timer.h"
@@ -22,6 +23,7 @@ int main(const int argc, char *argv[]) {
     const auto runtime = std::make_unique<CudaRuntime>();
     std::cout << "Using CUDA device: " << runtime->getDeviceName() << std::endl;
     const auto channel = std::make_unique<CudaChannel>(*runtime);
+    const auto exrWriter = std::make_unique<ExrWriter>();
     constexpr int SourceChannels = 3;
 
     // Create the filter pipeline
@@ -38,31 +40,37 @@ int main(const int argc, char *argv[]) {
         // Get the absolute path and the base filename
         auto const imagePathAbsolute = absolute(imagePath);
         auto const baseFileName = imagePathAbsolute.stem();
+        auto const outputPathAbsolute = imagePathAbsolute.parent_path() / (baseFileName.string() + "-normal-map.exr");
 
         std::cout << "Using image: " << imagePathAbsolute << std::endl;
-        auto const outputPathAbsolute = imagePathAbsolute.parent_path() / (baseFileName.string() + "-normal-map.png");
 
         // Load the image
         timer->lap("load image");
         Image<SourceChannels> image(imagePathAbsolute.string());
 
-        // Write the image to the channel
-        timer->lap("image -> channel");
-        image.writeToChannel(*channel);
-        runtime->synchronize();
-
         try {
+            // Write the image to the channel
+            // (Host memory -> Device memory)
+            timer->lap("image -> channel");
+            image.writeToChannel(*channel);
+            runtime->synchronize();
+
             // Create the normal map
+            // Executes the normal map filtering on the device
+            // then writes back to device memory
             timer->lap("create normal map");
             normalMap.apply(image);
 
-            // One last image for the normal map
+            // Read the image back from the device memory into host memory.
+            // The normal map will always have 3 dimensions. Nobody knows why. It should be 2.
             timer->lap("normal map -> host");
             image.readFromChannel(*channel);
 
+            // Wait for the device to complete
             runtime->synchronize();
 
-            image.save<uint8_t>(outputPathAbsolute.string());
+            // image.save<uint8_t>(outputPathAbsolute.string());
+            exrWriter->write < 3 > (image, outputPathAbsolute.string());
             std::cout << "Saved normal map to: " << outputPathAbsolute << std::endl;
         } catch (const std::exception &e) {
             std::cerr << "Error: " << e.what() << std::endl;
@@ -70,8 +78,6 @@ int main(const int argc, char *argv[]) {
     }
 
     timer->stop();
-    channel->freeDevicePtr();
-    cudaDeviceReset();
 
     return 0;
 }

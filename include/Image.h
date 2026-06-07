@@ -45,7 +45,11 @@ public:
 
     void writeToChannel(CudaChannel &channel) const;
 
+    void writeToChannel(CudaChannel *channel) const;
+
     void readFromChannel(const CudaChannel &channel);
+
+    void readFromChannel(const CudaChannel *channel);
 
     ~Image() = default;
 

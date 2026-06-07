@@ -1,7 +1,8 @@
-cmake_minimum_required(VERSION 3.21) # Note: 3.21+ is needed for TARGET_RUNTIME_DLLS
+cmake_minimum_required(VERSION 4.0) # Note: 3.21+ is needed for TARGET_RUNTIME_DLLS
 project(norm LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Find files
 file(GLOB_RECURSE SOURCES
@@ -44,7 +45,7 @@ target_include_directories(perturb PRIVATE "${CUDA_ROOT}/include")
 target_link_directories(perturb PRIVATE "${CUDA_ROOT}/lib/x64")
 
 # Link against CUDA libraries
-target_link_libraries(perturb PRIVATE npps nppim nppif nppitc nppisu nppicc nppist cuda cudart_static nppial)
+target_link_libraries(perturb PRIVATE nppim nppif nppitc nppisu nppicc nppist cuda cudart_static nppial)
 
 # STB - FetchContent
 include(FetchContent)
@@ -59,13 +60,22 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(stb)
 target_include_directories(perturb PRIVATE ${stb_SOURCE_DIR})
 
+# TinyEXR - FetchContent
+FetchContent_Declare(
+        tinyexr
+        GIT_REPOSITORY
+        "https://github.com/syoyo/tinyexr.git"
+        GIT_TAG
+        "v1.0.13"
+)
+
+FetchContent_MakeAvailable(tinyexr)
+target_include_directories(perturb PRIVATE ${tinyexr_SOURCE_DIR} "${tinyexr_SOURCE_DIR}/deps/miniz")
+
 # Copy necessary DLLs to the output directory
 if (WIN32)
     add_custom_command(TARGET perturb POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CUDA_ROOT}/bin/x64/cudart64_13.dll"
-#            "${CUDA_ROOT}/bin/x64/cublas64_13.dll"
-#            "${CUDA_ROOT}/bin/x64/cusolver64_12.dll"
-#            "${CUDA_ROOT}/bin/x64/cusparse64_12.dll"
             $<TARGET_FILE_DIR:perturb>)
 endif ()

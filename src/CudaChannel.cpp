@@ -6,12 +6,11 @@
 #include "CudaError.h"
 
 void CudaChannel::freeDevicePtr() noexcept {
-    if (!npp_stream_context->hStream || !device_ptr) {
-        device_ptr = std::make_unique<void *>(nullptr);
+    if (!npp_stream_context || !npp_stream_context->hStream || !device_ptr) {
         return;
     }
 
-    auto const ptr = device_ptr.release();
+    auto const ptr = *device_ptr.release();
     cudaFreeAsync(ptr, npp_stream_context->hStream);
     allocation_size = 0;
 

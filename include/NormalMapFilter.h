@@ -19,7 +19,7 @@ public:
     void apply(const Image<Channels> &image) const override;
 
 private:
-    SobelFilter<Channels> sobelFilter;
-    GaussianBlurFilter<Channels> gaussianBlurFilter;
+    SobelFilter<1> sobelFilter;
+    GaussianBlurFilter<1> gaussianBlurFilter;
     GrayscaleFilter<Channels> grayscaleFilter;
 };
